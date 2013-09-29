@@ -1369,7 +1369,19 @@ void transmitChannelState(uint8_t ch) {
 			while (!homecan_transmit(&msg)) {
 				_delay_ms(1);
 			}
+			/*
+			msg.header.priority = HOMECAN_HEADER_PRIO_DEFAULT;
+			msg.header.mode = HOMECAN_HEADER_MODE_SRC;
+			msg.msgtype = HOMECAN_MSGTYPE_STOPMOVE;
+			msg.address = homecan_getDeviceID();
+			msg.channel = ch;
+			msg.length = 1;
+			msg.data[0] = channelconfig[ch].raffstate.mode==RAFFSTORE_IDLE?0:1;
+			while (!homecan_transmit(&msg)) {
+				_delay_ms(1);
+			}
 			break;
+			*/
 #endif
 #ifdef CONFIG_KEYPAD
 		case FUNCTION_KEYPAD:
