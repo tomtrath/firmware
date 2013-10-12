@@ -89,6 +89,10 @@ static volatile uint8_t irsnd=0;
 #define CHANNELCONFIG_KWB_HK_AUTO	64
 #endif
 
+#ifdef CONFIG_HOMECAN_GATEWAY
+static uint8_t busloadChannel = 0;
+#endif
+
 static volatile uint8_t timer1s = 0;
 static volatile uint8_t timer100ms = 0;
 static volatile uint8_t counter = 0;
@@ -532,6 +536,7 @@ void transmitChannelConfig(uint8_t channel) {
 		msg.data[1] = channelconfig[channel].port[0];
 		msg.data[2] = channelconfig[channel].port[1];
 		msg.data[3] = channelconfig[channel].kwbstate.channel;
+		break;
 	case FUNCTION_KWB_TEMP:
 		msg.length = 5;
 		msg.data[1] = channelconfig[channel].port[0];
@@ -544,6 +549,14 @@ void transmitChannelConfig(uint8_t channel) {
 		msg.data[1] = channelconfig[channel].port[0];
 		msg.data[2] = channelconfig[channel].port[1];
 		msg.data[3] = channelconfig[channel].kwbhk.mode;
+		break;
+#endif
+#ifdef CONFIG_HOMECAN_GATEWAY
+	case FUNCTION_BUSLOAD:
+		msg.length = 2;
+		msg.data[1] = channelconfig[channel].port[0];
+		msg.data[2] = 0xFF;
+		msg.data[3] = channelconfig[channel].busloadstate.intervall;
 		break;
 #endif
 	}
@@ -719,6 +732,15 @@ bool channelconfig_configure(uint8_t channel, const channelconfig_t *config) {
 		}
 		break;
 #endif
+#ifdef CONFIG_HOMECAN_GATEWAY
+	case FUNCTION_BUSLOAD:
+		if (channelconfig_getPortType(config->port[0])==CIRCUIT_NONE) {
+			busloadChannel = channel;
+		} else {
+			return false;
+		}
+		break;
+#endif
 	case FUNCTION_NONE:
 		break;
 	default:
@@ -742,6 +764,11 @@ void channelconfig_receiveTask(void) {
 
 	//check for incoming can messages
 	while (homecan_receive(&msg)) {
+#ifdef CONFIG_HOMECAN_GATEWAY
+		if (busloadChannel!=0) {
+			channelconfig[busloadChannel].busloadstate.byteCount += msg.length+8;
+		}
+#endif
 		if (msg.header.mode==HOMECAN_HEADER_MODE_DST && msg.address == homecan_getDeviceID()) {
 			//message is for this device
 			if (msg.channel<=CHANNELCONFIG_MAX_CONFIG) {
@@ -886,6 +913,15 @@ void channelconfig_receiveTask(void) {
 							config.kwbhk.mode = 2;	//Automatik Mode
 							break;
 #endif
+#endif
+#ifdef CONFIG_HOMECAN_GATEWAY
+						case FUNCTION_BUSLOAD:
+							busloadChannel = msg.channel;
+							config.port[0] = msg.data[1];
+							config.busloadstate.byteCount = 0;
+							config.busloadstate.counter = 0;
+							config.busloadstate.intervall = msg.data[3];
+							break;
 #endif
 						}
 						config.changed = 1;
@@ -1100,6 +1136,8 @@ void channelconfig_receiveTask(void) {
 				case HOMECAN_MSGTYPE_WIND_SPEED:
 				case HOMECAN_MSGTYPE_WIND_DIRECTION:
 				case HOMECAN_MSGTYPE_RAIN:
+				case HOMECAN_MSGTYPE_FLOAT:
+				case HOMECAN_MSGTYPE_UINT32:
 #ifdef CONFIG_KEYPAD
 				case HOMECAN_MSGTYPE_KEY_SEQUENCE:
 #endif
@@ -1231,6 +1269,15 @@ void channelconfig_1sTask(void) {
 
 				channelconfig[ch].humiditystate.accumulator += ADCr >> 5;	// average the samples, and add to accumulator for lontime avg
 				channelconfig[ch].humiditystate.counter++;
+			}
+			break;
+#endif
+#ifdef CONFIG_HOMECAN_GATEWAY
+		case FUNCTION_BUSLOAD:		
+			channelconfig[ch].busloadstate.counter++;
+			if (channelconfig[ch].busloadstate.counter==channelconfig[ch].busloadstate.intervall && channelconfig[ch].busloadstate.intervall!=0) {
+				channelconfig[ch].busloadstate.counter = 0;
+				channelconfig[ch].changed = 1;
 			}
 			break;
 #endif
@@ -1512,6 +1559,23 @@ void transmitChannelState(uint8_t ch) {
 			}
 			break;
 #endif
+#ifdef CONFIG_HOMECAN_GATEWAY
+		case FUNCTION_BUSLOAD:
+			msg.header.priority = HOMECAN_HEADER_PRIO_DEFAULT;
+			msg.header.mode = HOMECAN_HEADER_MODE_SRC;
+			msg.msgtype = HOMECAN_MSGTYPE_FLOAT;
+			msg.address = homecan_getDeviceID();
+			msg.channel = ch;
+			msg.length = sizeof(float);
+			data = (float*)&msg.data[0];
+			*data = ((float)channelconfig[ch].busloadstate.byteCount+homecan_getTxByteCount())/channelconfig[ch].busloadstate.intervall;
+			channelconfig[ch].busloadstate.byteCount = 0;
+			while (!homecan_transmit(&msg)) {
+				_delay_ms(1);
+			}
+			break;
+#endif
+
 		}
 		channelconfig[ch].changed = 0;
 	}
@@ -1658,6 +1722,11 @@ void channelconfig_100msTask(void) {
 		case FUNCTION_KWB_HK:
  			break;
 	#endif
+#endif
+#ifdef CONFIG_HOMECAN_GATEWAY
+		case FUNCTION_BUSLOAD:
+			//slow, handled in 1s task
+			break;
 #endif
 		}
 		transmitChannelState(ch);

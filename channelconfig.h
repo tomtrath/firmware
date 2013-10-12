@@ -56,6 +56,9 @@ typedef enum function_t {
 	FUNCTION_KWB_TEMP = 18,
 	FUNCTION_KWB_HK = 19,
 #endif
+#ifdef CONFIG_HOMECAN_GATEWAY
+	FUNCTION_BUSLOAD = 20,
+#endif
 	FUNCTION_RESERVED = 255
 } function_t;
 
@@ -196,7 +199,15 @@ typedef struct
 	uint16_t position;
 } kwbhk_t;
 #endif
+#endif
 
+#ifdef CONFIG_HOMECAN_GATEWAY
+typedef struct
+{
+	uint32_t byteCount;
+	uint8_t intervall;
+	uint8_t counter;
+} busload_t;
 #endif
 
 typedef struct
@@ -231,6 +242,9 @@ typedef struct
 #ifdef CONFIG_POTIO
 		kwbhk_t kwbhk;
 #endif
+#endif
+#ifdef CONFIG_HOMECAN_GATEWAY
+		busload_t busloadstate;
 #endif
 	};
 	uint8_t changed;

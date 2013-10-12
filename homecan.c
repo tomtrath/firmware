@@ -23,6 +23,10 @@
 #ifdef CONFIG_HOMECAN_CAN
 #include "can.h"
 
+#ifdef CONFIG_HOMECAN_GATEWAY
+static uint32_t txByteCounter = 0;
+#endif
+
 static can_t msgtx,msgrx;
 static can_filter_t filter = {
 	.id = 0x100,
@@ -35,10 +39,10 @@ static can_filter_t filter = {
 #endif
 
 #ifdef CONFIG_HOMECAN_UDP
-static uint8_t mymac[6] = {0x00,0x04,0xA3,0x00,0x00,0x03};
+static uint8_t mymac[6] = {0x00,0x04,0xA3,0x00,0x00,0x01};
 static uint8_t broadcastmac[6] = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
 
-static uint8_t myip[4] = {192,168,1,12};
+static uint8_t myip[4] = {192,168,1,10};
 static uint8_t serverip[4] = {192,168,1,255};
 
 
@@ -197,11 +201,22 @@ bool homecan_transmit(const homecan_t *msg) {
 	return homecan_transmitUDP(msg);
 #else
 #ifdef CONFIG_HOMECAN_CAN
+#ifdef CONFIG_HOMECAN_GATEWAY
+	txByteCounter+=msg->length+8;
+#endif
 	return homecan_transmitCAN(msg);
 #endif
 #endif
 	return false;
 }
+
+#ifdef CONFIG_HOMECAN_GATEWAY
+uint32_t homecan_getTxByteCount(void) {
+	uint32_t count = txByteCounter;
+	txByteCounter = 0;
+	return count;
+}
+#endif
 
 bool homecan_receive(homecan_t *msg) {
 	bool res = false;
@@ -210,9 +225,7 @@ bool homecan_receive(homecan_t *msg) {
 		res = homecan_receiveCAN(msg);
 #ifdef CONFIG_HOMECAN_GATEWAY
 		if (res==true) {
-			if (msg->address==deviceID && msg->header.mode==HOMECAN_HEADER_MODE_DST) {
-				return true;
-			} else {
+			if (msg->address!=deviceID || msg->header.mode!=HOMECAN_HEADER_MODE_DST) {
 				//forward to udp
 				homecan_transmitUDP(msg);
 			}
@@ -225,9 +238,7 @@ bool homecan_receive(homecan_t *msg) {
 		res = homecan_receiveUDP(msg);
 #ifdef CONFIG_HOMECAN_GATEWAY
 		if (res==true) {
-			if (msg->address==deviceID && msg->header.mode==HOMECAN_HEADER_MODE_DST) {
-				return true;
-			} else {
+			if (msg->address!=deviceID || msg->header.mode!=HOMECAN_HEADER_MODE_DST) {
 				//forward to CAN
 				while (!homecan_transmitCAN(msg)) {
 					_delay_ms(1);

@@ -22,14 +22,15 @@ typedef struct
 	circuit_t circuit;
 } portconfig_t;
 
-#define CHANNELCONFIG_MAX_PORT	4
+#define CHANNELCONFIG_MAX_PORT	5
 
 static portconfig_t portconfig[CHANNELCONFIG_MAX_PORT+1] = {
 		{ 0, CIRCUIT_OUT},
 		{ 1, CIRCUIT_INPUT},
 		{ 2, CIRCUIT_RS485TX},
 		{ 3, CIRCUIT_RS485RX},
-		{ 4, CIRCUIT_I2C}
+		{ 4, CIRCUIT_I2C},
+		{ 5, CIRCUIT_NONE}
 };
 
 circuit_t channelconfig_getPortType(uint8_t port) {

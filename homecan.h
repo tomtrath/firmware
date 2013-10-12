@@ -41,6 +41,9 @@ typedef enum homecan_msgtype_t {
 	HOMECAN_MSGTYPE_FTKID				= 0x12,
 #endif
 
+	HOMECAN_MSGTYPE_FLOAT				= 0x20,
+	HOMECAN_MSGTYPE_UINT32				= 0x21,
+
 #ifdef CONFIG_KEYPAD
 	HOMECAN_MSGTYPE_KEY_SEQUENCE		= 0x80,
 #endif
@@ -93,5 +96,9 @@ bool homecan_transmit(const homecan_t *msg);
 bool homecan_receive(homecan_t *msg);
 void homecan_transmitHeartbeat(void);
 uint8_t homecan_getDeviceID(void);
+
+#ifdef CONFIG_HOMECAN_GATEWAY
+uint32_t homecan_getTxByteCount(void);
+#endif
 
 #endif
