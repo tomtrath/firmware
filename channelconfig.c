@@ -112,12 +112,23 @@ void rxHandler(const rs485eltako_t *msg) {
 	for (ch=0;ch<=CHANNELCONFIG_MAX_CONFIG;ch++) {
 		if (channelconfig[ch].function==FUNCTION_FTK) {
 			if (msg->id==channelconfig[ch].ftkstate.id) {
-				if (msg->data==RS485ELTAKO_FTK_OPENED) {
-					channelconfig[ch].ftkstate.state = 0x01;
-				} else if (msg->data==RS485ELTAKO_FTK_CLOSED) {
-					channelconfig[ch].ftkstate.state = 0x00;
-				}	
-				channelconfig[ch].changed = 1;
+				if (msg->org==RS485ELTAKO_ORG_1BS) {
+					if (msg->data==RS485ELTAKO_FTK_OPENED) {
+						channelconfig[ch].ftkstate.state = 0x01;
+						channelconfig[ch].changed = 1;
+					} else if (msg->data==RS485ELTAKO_FTK_CLOSED) {
+						channelconfig[ch].ftkstate.state = 0x00;
+						channelconfig[ch].changed = 1;
+					}
+				} else if (msg->org==RS485ELTAKO_ORG_RPS) {
+					if (msg->data==RS485ELTAKO_FPE_OPENED) {
+						channelconfig[ch].ftkstate.state = 0x01;
+						channelconfig[ch].changed = 1;
+					} else if (msg->data==RS485ELTAKO_FPE_CLOSED) {
+						channelconfig[ch].ftkstate.state = 0x00;
+						channelconfig[ch].changed = 1;
+					}
+				}
 			} else {
 				if (channelconfig[ch].ftkstate.sniffing) {
 					//sniffing mode

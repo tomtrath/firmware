@@ -45,6 +45,9 @@ typedef struct
 #define RS485ELTAKO_FTK_OPENED		0x08000000
 #define RS485ELTAKO_FTK_CLOSED		0x09000000
 
+#define RS485ELTAKO_FPE_OPENED		0x00000000
+#define RS485ELTAKO_FPE_CLOSED		0x10000000
+
 //functions
 extern void rs485eltako_init(void);
 
