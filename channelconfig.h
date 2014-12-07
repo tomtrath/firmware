@@ -181,6 +181,8 @@ typedef struct
 {
 	uint8_t value;
 	uint8_t channel;
+	uint8_t intervall;
+	uint8_t counter;
 } kwbstate_t;
 
 typedef struct

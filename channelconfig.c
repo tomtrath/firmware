@@ -543,10 +543,11 @@ void transmitChannelConfig(uint8_t channel) {
 #endif
 #ifdef CONFIG_KWB
 	case FUNCTION_KWB_INPUT:
-		msg.length = 4;
+		msg.length = 5;
 		msg.data[1] = channelconfig[channel].port[0];
 		msg.data[2] = channelconfig[channel].port[1];
 		msg.data[3] = channelconfig[channel].kwbstate.channel;
+		msg.data[4] = channelconfig[channel].kwbstate.intervall;
 		break;
 	case FUNCTION_KWB_TEMP:
 		msg.length = 5;
@@ -909,6 +910,8 @@ void channelconfig_receiveTask(void) {
 							config.port[0] = msg.data[1];
 							config.kwbstate.value = 0xFF;
 							config.kwbstate.channel = msg.data[3];
+							config.kwbstate.intervall = msg.data[4];
+							config.kwbstate.counter = 0;
 							break;
 						case FUNCTION_KWB_TEMP:
 							config.port[0] = msg.data[1];
@@ -1231,6 +1234,15 @@ void channelconfig_1sTask(void) {
 			channelconfig[ch].kwbtemp.counter++;
 			if (channelconfig[ch].kwbtemp.counter==channelconfig[ch].kwbtemp.intervall) {
 				channelconfig[ch].kwbtemp.counter = 0;
+			}
+			break;
+		case FUNCTION_KWB_INPUT:
+			if (channelconfig[ch].kwbstate.counter==0) {
+				channelconfig[ch].changed = 1;
+			}
+			channelconfig[ch].kwbstate.counter++;
+			if (channelconfig[ch].kwbstate.counter==channelconfig[ch].kwbstate.intervall) {
+				channelconfig[ch].kwbstate.counter = 0;
 			}
 			break;
 #endif
