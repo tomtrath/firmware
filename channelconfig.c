@@ -1290,7 +1290,7 @@ void channelconfig_1sTask(void) {
 					ADCr += ADCH;    // read out ADCH register and accumulate result (8 samples) for later averaging
 				}
 
-				channelconfig[ch].humiditystate.accumulator += ADCr >> 5;	// average the samples, and add to accumulator for lontime avg
+				channelconfig[ch].humiditystate.accumulator += (ADCr >> 5);	// average the samples, and add to accumulator for lontime avg
 				channelconfig[ch].humiditystate.counter++;
 			}
 			break;
