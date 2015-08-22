@@ -58,8 +58,8 @@
 channelconfig_t channelconfig[CHANNELCONFIG_MAX_CONFIG+1];
 
 #ifdef CONFIG_SSR
-#define CHANNELCONFIG_SSR_DELAY_MS	9
-#define CHANNELCONFIG_SSR_MAX_REPEAT 10
+#define CHANNELCONFIG_SSR_DELAY_MS	50
+#define CHANNELCONFIG_SSR_MAX_REPEAT 3
 #endif
 
 #ifdef CONFIG_RAFFSTORE
@@ -111,39 +111,53 @@ void rxHandler(const rs485eltako_t *msg) {
 	uint8_t ch;
 	for (ch=0;ch<=CHANNELCONFIG_MAX_CONFIG;ch++) {
 		if (channelconfig[ch].function==FUNCTION_FTK) {
-			if (msg->id==channelconfig[ch].ftkstate.id) {
+			if (msg->id==channelconfig[ch].enoceanstate.id) {
 				if (msg->org==RS485ELTAKO_ORG_1BS) {
 					if (msg->data==RS485ELTAKO_FTK_OPENED) {
-						channelconfig[ch].ftkstate.state = 0x01;
+						channelconfig[ch].enoceanstate.state = 0x01;
 						channelconfig[ch].changed = 1;
 					} else if (msg->data==RS485ELTAKO_FTK_CLOSED) {
-						channelconfig[ch].ftkstate.state = 0x00;
+						channelconfig[ch].enoceanstate.state = 0x00;
 						channelconfig[ch].changed = 1;
 					}
 				} else if (msg->org==RS485ELTAKO_ORG_RPS) {
 					if (msg->data==RS485ELTAKO_FPE_OPENED) {
-						channelconfig[ch].ftkstate.state = 0x01;
+						channelconfig[ch].enoceanstate.state = 0x01;
 						channelconfig[ch].changed = 1;
 					} else if (msg->data==RS485ELTAKO_FPE_CLOSED) {
-						channelconfig[ch].ftkstate.state = 0x00;
+						channelconfig[ch].enoceanstate.state = 0x00;
 						channelconfig[ch].changed = 1;
 					}
 				}
-			} else {
-				if (channelconfig[ch].ftkstate.sniffing) {
-					//sniffing mode
-					homecan_t msgHomecan;
-					msgHomecan.header.priority = HOMECAN_HEADER_PRIO_DEFAULT;
-					msgHomecan.header.mode = HOMECAN_HEADER_MODE_SRC;
-					msgHomecan.msgtype = HOMECAN_MSGTYPE_FTKID;
-					msgHomecan.address = homecan_getDeviceID();
-					msgHomecan.channel = ch;
-					msgHomecan.length = 4;
-					memcpy(&msgHomecan.data[0],&msg->idbuf[0],4);
-					while (!homecan_transmit(&msgHomecan)) {
-						_delay_ms(1);
+			}
+		} else if (channelconfig[ch].function==FUNCTION_FRW) {
+			if (msg->id==channelconfig[ch].enoceanstate.id) {
+				if (msg->org==RS485ELTAKO_ORG_RPS) {
+					if (msg->data==RS485ELTAKO_FRW_ALARM) {
+						channelconfig[ch].enoceanstate.state = 0x02;
+						channelconfig[ch].changed = 1;
+					} else if (msg->data==RS485ELTAKO_FRW_ALARM_OFF) {
+						channelconfig[ch].enoceanstate.state = 0x00;
+						channelconfig[ch].changed = 1;
+					} else if (msg->data==RS485ELTAKO_FRW_BATTERY_LOW) {
+						//Battery alarm received
+						channelconfig[ch].enoceanstate.state = 0x01;
+						channelconfig[ch].changed = 1;
 					}
 				}
+			}
+		} else if (channelconfig[ch].function==FUNCTION_ENOCEAN_SNIFFER) {
+			//sniffing mode
+			homecan_t msgHomecan;
+			msgHomecan.header.priority = HOMECAN_HEADER_PRIO_DEFAULT;
+			msgHomecan.header.mode = HOMECAN_HEADER_MODE_SRC;
+			msgHomecan.msgtype = HOMECAN_MSGTYPE_ENOCEANID;
+			msgHomecan.address = homecan_getDeviceID();
+			msgHomecan.channel = ch;
+			msgHomecan.length = 4;
+			memcpy(&msgHomecan.data[0],&msg->idbuf[0],4);
+			while (!homecan_transmit(&msgHomecan)) {
+				_delay_ms(1);
 			}
 		}
 	}	
@@ -466,15 +480,16 @@ void transmitChannelConfig(uint8_t channel) {
 #endif
 #ifdef CONFIG_ELTAKO
 	case FUNCTION_DIMMER:
+	case FUNCTION_ENOCEAN_SNIFFER:
 		msg.length = 2;
 		msg.data[1] = channelconfig[channel].port[0];
 		break;
 	case FUNCTION_FTK:
+	case FUNCTION_FRW:
 		msg.length = 8;
 		msg.data[1] = channelconfig[channel].port[0];
 		msg.data[2] = channelconfig[channel].port[1];
-		msg.data[3] = channelconfig[channel].ftkstate.sniffing;
-		memcpy(&msg.data[4],&channelconfig[channel].ftkstate.id_buffer[0],4);
+		memcpy(&msg.data[3],&channelconfig[channel].enoceanstate.id_buffer[0],4);
 		break;
 #endif
 #ifdef CONFIG_TEMP
@@ -636,6 +651,8 @@ bool channelconfig_configure(uint8_t channel, const channelconfig_t *config) {
 		}
 		break;
 	case FUNCTION_FTK:
+	case FUNCTION_FRW:
+	case FUNCTION_ENOCEAN_SNIFFER:
 		if (channelconfig_getPortType(config->port[0])==CIRCUIT_RS485RX) {
 			//valid
 		} else {
@@ -843,10 +860,13 @@ void channelconfig_receiveTask(void) {
 							config.dimmerstate.value = 0;
 							break;
 						case FUNCTION_FTK:
+						case FUNCTION_FRW:
 							config.port[0] = msg.data[1];
-							config.ftkstate.sniffing = msg.data[3];
-							memcpy(&config.ftkstate.id_buffer[0],&msg.data[4],4);
-							config.ftkstate.state = 0;
+							memcpy(&config.enoceanstate.id_buffer[0],&msg.data[3],4);
+							config.enoceanstate.state = 0;
+							break;
+						case FUNCTION_ENOCEAN_SNIFFER:
+							config.port[0] = msg.data[1];
 							break;
 #endif
 #ifdef CONFIG_TEMP
@@ -966,10 +986,12 @@ void channelconfig_receiveTask(void) {
 #endif
 #ifdef CONFIG_SSR
 					if (channelconfig[msg.channel].function==FUNCTION_SSR) {
-						if (msg.data[0]!=channelconfig_getPort(channelconfig[msg.channel].port[1])) {
-							channelconfig_setPort(channelconfig[msg.channel].port[0],0x01);
-							_delay_ms(CHANNELCONFIG_SSR_DELAY_MS);
-							channelconfig_setPort(channelconfig[msg.channel].port[0],0x00);
+						uint8_t loop = 1;
+						while (msg.data[0]!=channelconfig_getPort(channelconfig[msg.channel].port[1]) && loop <= CHANNELCONFIG_SSR_MAX_REPEAT) {
+							channelconfig_setPort(channelconfig[msg.channel].port[0], 0x01);
+							_delay_ms(CHANNELCONFIG_SSR_DELAY_MS * loop);
+							channelconfig_setPort(channelconfig[msg.channel].port[0], 0x00);
+							loop++;
 						}
 					}
 #endif
@@ -1087,8 +1109,6 @@ void channelconfig_receiveTask(void) {
 						channelconfig[msg.channel].changed = 1;
 					}
 					break;
-				case HOMECAN_MSGTYPE_FTKID:
-					break;
 #endif
 #ifdef CONFIG_BUZZER
 				case HOMECAN_MSGTYPE_BUZZER:
@@ -1156,6 +1176,10 @@ void channelconfig_receiveTask(void) {
 				case HOMECAN_MSGTYPE_KEY_SEQUENCE:
 #endif
 				case HOMECAN_MSGTYPE_STRING:
+#ifdef CONFIG_ELTAKO
+				case HOMECAN_MSGTYPE_ENOCEANID:
+				case HOMECAN_MSGTYPE_FRW:
+#endif
 					break;
 /*
 				case HOMECAN_MSGTYPE_LED:
@@ -1397,10 +1421,24 @@ void transmitChannelState(uint8_t ch) {
 			msg.address = homecan_getDeviceID();
 			msg.channel = ch;
 			msg.length = 1;
-			msg.data[0] = channelconfig[ch].ftkstate.state;
+			msg.data[0] = channelconfig[ch].enoceanstate.state;
 			while (!homecan_transmit(&msg)) {
 				_delay_ms(1);
 			}
+			break;
+		case FUNCTION_FRW:
+			msg.header.priority = HOMECAN_HEADER_PRIO_DEFAULT;
+			msg.header.mode = HOMECAN_HEADER_MODE_SRC;
+			msg.msgtype = HOMECAN_MSGTYPE_FRW;
+			msg.address = homecan_getDeviceID();
+			msg.channel = ch;
+			msg.length = 1;
+			msg.data[0] = channelconfig[ch].enoceanstate.state;
+			while (!homecan_transmit(&msg)) {
+				_delay_ms(1);
+			}
+			break;
+		case FUNCTION_ENOCEAN_SNIFFER:
 			break;
 #endif
 #ifdef CONFIG_LED
@@ -1450,8 +1488,8 @@ void transmitChannelState(uint8_t ch) {
 			while (!homecan_transmit(&msg)) {
 				_delay_ms(1);
 			}
-			break;
 			*/
+			break;
 #endif
 #ifdef CONFIG_KEYPAD
 		case FUNCTION_KEYPAD:
@@ -1657,8 +1695,9 @@ void channelconfig_100msTask(void) {
 #endif
 #ifdef CONFIG_ELTAKO
 		case FUNCTION_DIMMER:
-			break;
 		case FUNCTION_FTK:
+		case FUNCTION_FRW:
+		case FUNCTION_ENOCEAN_SNIFFER:
 			break;
 #endif
 #ifdef CONFIG_LED

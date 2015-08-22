@@ -27,6 +27,8 @@ typedef enum function_t {
 #ifdef CONFIG_ELTAKO
 	FUNCTION_DIMMER = 5,
 	FUNCTION_FTK = 6,
+	FUNCTION_FRW = 21,
+	FUNCTION_ENOCEAN_SNIFFER = 22,
 #endif
 #ifdef CONFIG_TEMP
 	FUNCTION_TEMPSENS = 7,
@@ -151,9 +153,8 @@ typedef struct
 		uint32_t id;
 		uint8_t id_buffer[4];
 	};
-	uint8_t sniffing;
 	uint8_t state;
-} ftk_t;
+} enocean_t;
 #endif
 
 #ifdef CONFIG_ANALOG
@@ -229,7 +230,7 @@ typedef struct
 #endif
 #ifdef CONFIG_ELTAKO
 		dimmerstate_t dimmerstate;
-		ftk_t ftkstate;
+		enocean_t enoceanstate;
 #endif
 #ifdef CONFIG_TEMP
 		temperature_t tempstate;
